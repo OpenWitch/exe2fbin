@@ -216,7 +216,7 @@ int i;
     /* Check output extension--change EXE to COM, or add COM */
     if ((cp = strchr (fon, '.')) == (char *) NULL)
         strcat (fon, defext);
-    else if (strcmp (cp, ".exe") == 0)
+    else
         strcpy (cp, defext);
 
     /* Try to open input file */
