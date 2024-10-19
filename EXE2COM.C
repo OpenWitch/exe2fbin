@@ -69,9 +69,11 @@
 
 */
 
-#include <stdio.h>
-#include <string.h>
 #include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 /* Version coding */
 #define MAJVER   1
@@ -98,7 +100,7 @@
 */
 struct exe_header {
         char exe_sig[2];    /* EXE file signature: "MZ" */
-    unsigned excess,        /* Image size mod 512 (valid bytes in last page) */
+    unsigned short excess,        /* Image size mod 512 (valid bytes in last page) */
              pages,         /* # 512-byte pages in image */
              relo_ct,       /* Count of relocation table entries */
              hdr_size,      /* Size of header, in paragraphs */
@@ -141,9 +143,7 @@ void usage (void);
 /*
 **  program mainline
 */
-main(argc, argv)
-unsigned argc;
-char *argv[];
+int main(unsigned argc, char *argv[])
 {
     init (argc, argv);
     read_hdr ();
@@ -160,9 +160,7 @@ char *argv[];
 /*
 **  Initialize - parse arguments, get filenames, open/create files
 */
-void init (argc, argv)
-unsigned argc;
-char **argv;
+void init (unsigned argc, char **argv)
 {
 char c, *cp;
 int i;
@@ -190,9 +188,9 @@ int i;
 
         if (**argv)
             if (fin[0] == '\0')
-                strcpy (fin, strlwr (*argv));
+                strcpy (fin, (*argv));
             else if (fon[0] == '\0')
-                strcpy (fon, strlwr (*argv));
+                strcpy (fon, (*argv));
             else
                 usage ();
 
@@ -282,7 +280,9 @@ char *cp;
     **      -- IP == 0 or 100
     **      -- code size < 65536
     */
-    if (xh.relo_ct) {
+
+    // exe2fbin: ignore most checks
+    /* if (xh.relo_ct) {
         if (relo_map) print_relo_map();
         err_xit (HASRELO);
     }
@@ -291,7 +291,7 @@ char *cp;
     if (xh.cs)
         err_xit (HAS_CS);
     if (xh.ip != 0 && xh.ip != 0x100)
-        err_xit (BAD_IP);
+        err_xit (BAD_IP); */
     if (code_size > 65536L)
         err_xit (TOO_BIG);
 
@@ -390,7 +390,7 @@ unsigned bsize;
 void print_relo_map (void)
 {
 static char emsg[] = "exe2com: error reading relocation table\n";
-char far *relo_ptr;
+unsigned short relo_ptr[2];
 int i;
 
     if (fseek (fi, (long) xh.relo_start, SEEK_SET)) {
@@ -400,11 +400,11 @@ int i;
 
     printf ("relocation table:\n");
     for (i = 1; i <= xh.relo_ct; i++) {
-        if (!fread (&relo_ptr, sizeof (char far *), 1, fi)) {
+        if (!fread (relo_ptr, 4, 1, fi)) {
             fprintf (stderr, emsg);
             return;
         }
-        printf ("  %Fp", relo_ptr);
+        printf ("  %04X:%04X", relo_ptr[1], relo_ptr[0]);
         if (!(i % 6))
             putchar ('\n');
     }
@@ -416,8 +416,7 @@ int i;
 /*
 **  Display an error message, delete output file, exit.
 */
-void err_xit (code)
-unsigned code;
+void err_xit (unsigned code)
 {
 static char *msg[UNKNOWN+1] = {
         "error reading EXE header",
