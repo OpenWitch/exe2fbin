@@ -36,6 +36,10 @@
 
     Version history
     ---------------
+    Version 1.05 08/23/90 (CJD)
+        Added /R switch (relo table display).
+        Now compiled with MSC 6.0.
+
     Version 1.04 03/02/88 (CJD)
         Cleaned up some ugly code from the original quickie. Added
         /I (info) switch.  In previous versions, we defined an
@@ -72,7 +76,7 @@
 /* Version coding */
 #define MAJVER   1
 #define MINVER   0
-#define REVISION 4
+#define REVISION 5
 
 /* Conversion error codes */
 #define BADREAD  0
@@ -116,6 +120,7 @@ char fin[129],              /* Input file name */
      fon[129];              /* Output file name */
 
 int  info=0;                /* Nonzero if /I found */
+int  relo_map=0;            /* Nonzero if /R found */
 
 char buf[CONBUFSIZ];        /* printf I/O buffer */
 
@@ -129,6 +134,7 @@ void init (unsigned, char *[]);
 void read_hdr (void);
 void disp_info (void);
 void convert (void);
+void print_relo_map (void);
 void err_xit (unsigned);
 void usage (void);
 
@@ -141,8 +147,11 @@ char *argv[];
 {
     init (argc, argv);
     read_hdr ();
-    if (info)
+    if (info) {
         disp_info ();
+        if (xh.relo_ct && relo_map)
+            print_relo_map();
+    }
     else
         convert ();
 }
@@ -158,8 +167,6 @@ char **argv;
 char c, *cp;
 int i;
 
-    /* Set up buffered output, display logo */
-    setvbuf (stdout, buf, _IOFBF, CONBUFSIZ);
     printf ("exe2com %u.%u%u by Chris Dunford/The Cove Software Group\n",
              MAJVER, MINVER, REVISION);
 
@@ -168,14 +175,17 @@ int i;
     for (i=1; i < argc; i++) {
         while ( (cp = strchr (cp, '/')) != (char *) NULL) {
             *cp++ = '\0';
-            c = *cp++;
-            switch (toupper (c)) {
-                case 'I':
-                    info = 1;
-                    break;
-                default:
-                    usage ();
-            }
+            while (c = *cp++)
+                switch (toupper (c)) {
+                    case 'I':
+                        info = 1;
+                        break;
+                    case 'R':
+                        relo_map = 1;
+                        break;
+                    default:
+                        usage ();
+                }
         }
 
         if (**argv)
@@ -226,7 +236,7 @@ int i;
 */
 void usage (void)
 {
-    fprintf (stderr, "usage: exe2com [/I] infile [outfile]\n");
+    fprintf (stderr, "usage: exe2com [/IR] infile [outfile]\n");
     exit (1);
 }
 
@@ -272,8 +282,10 @@ char *cp;
     **      -- IP == 0 or 100
     **      -- code size < 65536
     */
-    if (xh.relo_ct)
+    if (xh.relo_ct) {
+        if (relo_map) print_relo_map();
         err_xit (HASRELO);
+    }
     if (xh.ss || xh.sp)
         err_xit (HAS_SS);
     if (xh.cs)
@@ -286,7 +298,6 @@ char *cp;
     /* Issue a warning if COM file and IP != 0x100 */
     if (!strcmp (strchr (fon, '.'), ".com") && xh.ip != 0x100)
         fprintf (stderr, "exe2com warning: COM file, initial IP not 100H\n");
-
 }
 
 
@@ -367,6 +378,38 @@ unsigned bsize;
     /* All done, close the two files */
     fclose (fi);
     fclose (fo);
+}
+
+
+/*
+** Display a map of relocatable items.  When we start, the input file is
+** is still open (fi).  We'll seek to the start of the relo table and
+** just read dwords from there.
+**
+*/
+void print_relo_map (void)
+{
+static char emsg[] = "exe2com: error reading relocation table\n";
+char far *relo_ptr;
+int i;
+
+    if (fseek (fi, (long) xh.relo_start, SEEK_SET)) {
+        fprintf (stderr, emsg);
+        return;
+    }
+
+    printf ("relocation table:\n");
+    for (i = 1; i <= xh.relo_ct; i++) {
+        if (!fread (&relo_ptr, sizeof (char far *), 1, fi)) {
+            fprintf (stderr, emsg);
+            return;
+        }
+        printf ("  %Fp", relo_ptr);
+        if (!(i % 6))
+            putchar ('\n');
+    }
+    if (xh.relo_ct % 6)
+        putchar ('\n');
 }
 
 

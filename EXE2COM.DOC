@@ -1,4 +1,4 @@
-                                  EXE2COM 1.04
+                                  EXE2COM 1.05
                          By Chris Dunford/Cove Software
 
         | indicates information changed/added in recent versions.
@@ -15,13 +15,12 @@
         Usage
         -----
         Usage is identical to DOS's EXE2BIN except that the output file
-        extension defaults to COM rather than BIN, and there is an
-        optional switch that displays EXE file information rather than
-        converting the file to COM.
+        extension defaults to COM rather than BIN, and there are two
+        optional switches.
 
         Complete usage is:
 
-            EXE2COM [/I] [d:][path]file[ext] [d:][path][file][ext]
+      |     EXE2COM [/IR] [d:][path]file[ext] [d:][path][file][ext]
 
         The drive and path of the first file default to the current
         drive and path, if not specified.  The extension of the first
@@ -34,9 +33,12 @@
         If the second file is specified but without an extension, COM
         will be assumed (this is different from EXE2BIN).
 
-      | If /I is specified, information about the EXE file is displayed
-      | and no conversion is performed.  The output file name, if
-      | specified, is ignored.
+        If /I is specified, information about the EXE file is displayed
+        and no conversion is performed.  The output file name, if
+        specified, is ignored.
+
+      | If /R is specified and the EXE file contains relocatable items,
+      | the relocation table is displayed (see below).
 
         The simplest (and usual) usage is simply:
 
@@ -62,46 +64,106 @@
             4. The default output file extension is COM rather than BIN.
 
 
-      | Information display
-      | -------------------
-      | If you use the /I switch, EXE2COM just displays information
-      | about the EXE file and does not attempt to convert it to COM
-      | (therefore, the EXE file need not be a convertible file).  Here
-      | is a typical display, resulting from running EXE2COM on itself
-      | (version 1.04) with the /I switch:
+        Information display
+        -------------------
+        If you use the /I switch, EXE2COM just displays information
+        about the EXE file and does not attempt to convert it to COM
+        (therefore, the EXE file need not be a convertible file).  Here
+        is a typical display, resulting from running EXE2COM on itself
+        (version 1.04) with the /I switch:
+
+          exe2com.exe                   (hex)      (dec)
+            EXE file size                396B      14699
+            EXE header size (para)         20         32
+            Program image size (bytes)   376B      14187
+            Minimum load size (bytes)    8CDB      36059
+            Min allocation (para)         557       1367
+            Max allocation (para)        FFFF      65535
+          * Initial CS:IP           0000:072C
+          * Initial SS:SP           084D:0800       2048 (stack size)
+          * Relocation count                4          4
+            Relo table start             001E         30
+            EXE file checksum            411D      16669
+            Overlay number                  0          0
+          * = this item prevents conversion to BIN/COM
+
+        The fields that may need some explanation:
+
+        Program image size:  this is the size of the program itself
+        (i.e., the size of the EXE file less the size of the header
+        information).  This much memory is required to load a copy of
+        the program's code and pre-allocated data.
+
+        Minimum load size: at least this much free memory is required in
+        order to run the program.
+
+        Min/max allocation: the minimum/maximum number of 16-byte
+        paragraphs that will be needed above the end of the program
+        image when it is loaded.  Minimum load size is the sum of the
+        program image size and the minimum allocation.
+
+        Relocation count: see below.
+
+        If an item is starred (*), this prevents the EXE file from being
+        converted to a COM file.
+
+
+      | Relocatable items
+      | -----------------
+      | The most common reason why a file cannot be converted to COM
+      | or SYS format is that it has "relocatable items."
       |
-      |   exe2com.exe                   (hex)      (dec)
-      |     EXE file size                396B      14699
-      |     EXE header size (para)         20         32
-      |     Program image size (bytes)   376B      14187
-      |     Minimum load size (bytes)    8CDB      36059
-      |     Min allocation (para)         557       1367
-      |     Max allocation (para)        FFFF      65535
-      |   * Initial CS:IP           0000:072C
-      |   * Initial SS:SP           084D:0800       2048 (stack size)
-      |   * Relocation count                4          4
-      |     Relo table start             001E         30
-      |     EXE file checksum            411D      16669
-      |     Overlay number                  0          0
-      |   * = this item prevents conversion to BIN/COM
+      | A relocatable item is a piece of code that must be "fixed up"
+      | when the program is run because it changes with the program's
+      | load address.  Consider this code fragment:
       |
-      | The fields that may need some explanation:
+      |     code segment byte public
+      |     mov ax,code
+      |     ...
       |
-      | Program image size:  this is the size of the program itself
-      | (i.e., the size of the EXE file less the size of the header
-      | information).  This much memory is required to load a copy of
-      | the program's code and pre-allocated data.
+      | What gets moved into AX is CODE's segment address, which is
+      | not known until runtime.  The assembler can't specify the
+      | value to be loaded into AX because it doesn't know where in
+      | memory the program will be loaded.  Only the EXE file loader
+      | can perform this operation; hence, it can't be converted into
+      | a COM or SYS file.
       |
-      | Minimum load size: at least this much free memory is required in
-      | order to run the program.
+      | The EXE file header contains one entry for each such relocatable
+      | item.  This entry consists of the segment and offset of the word
+      | that must be fixed up at runtime.  Note that the "segment" is
+      | relative to the first segment of the program; the first segment
+      | will be 0000.
       |
-      | Min/max allocation: the minimum/maximum number of 16-byte
-      | paragraphs that will be needed above the end of the program
-      | image when it is loaded.  Minimum load size is the sum of the
-      | program image size and the minimum allocation.
+      | If you see the message "EXE contains relocatable items", you can
+      | ask EXE2COM to find the items by re-running it with the /R
+      | /R switch:
       |
-      | If an item is starred (*), this prevents the EXE file from being
-      | converted to a COM file.
+      |     exe2com /r myprog
+      |
+      | EXE2COM might display something like this:
+      |
+      |     relocation table:
+      |       0000:00AF  0000:01C3
+      |
+      | This shows that there are two relocatable items in the EXE file
+      | and that they are located at the specified segment:offset
+      | addresses.  The first relocatable item in this case is located
+      | at offset 00AFh of the program's first segment.
+      |
+      | A list (.LST) file can be very helpful in finding your
+      | relocatable items: for each one (in the opcode column), you will
+      | see a "----" where a number should be.  In the example, it
+      | might look like:
+      |
+      |     00AE  B8 ---- R              mov ax,code
+      |
+      | EXE2COM's relocation table display can be helpful in letting
+      | you know where to look for the error.
+      |
+      | To correct the problem, restate the instruction in a way that
+      | doesn't require a direct reference to a segment.  For example,
+      | you might recode "mov ax,code" as "mov ax,cs" (assuming that CS
+      | points to the CODE segment).
 
 
         Error Messages
@@ -126,7 +188,7 @@
             have any direct references to segments.  For example, the
             assembler instruction "mov ax,code" (where CODE is a segment
             name) is a segment reference.  One or more segment
-            references were found in the EXE file.
+            references were found in the EXE file.  See above.
 
         EXE HAS STACK SEGMENT
             In order to be converted to a COM file, an EXE file cannot
@@ -169,11 +231,13 @@
         encouraged to modify, improve, and/or correct the source for
         EXE2COM and submit the new program to the author for
         distribution.  Please identify clearly any changes made and
-        stick with portable code (no inline assembler, PLEASE).
+        stick with portable code to the extent possible (no inline
+        assembler, PLEASE).
 
-        Source for EXE2COM was written for the Microsoft C compiler
-        (v.5.0) but will also compile correctly with Borland's Turbo C
-        (v.1.5).  It should be easily portable to most other compilers.
+        EXE2COM.EXE was compiled with Microsoft C 6.0, but I believe
+        that it will compile correctly with Borland's Turbo C (I don't
+        have TC, so can't swear to this).  It should be easily portable
+        to most other compilers.
 
 
         Public domain
@@ -223,3 +287,6 @@
 
             In earlier versions, we defined an error code for nonzero
             CS, but didn't actually check; now we do.
+
+        Version 1.05 08/23/90: by Chris Dunford
+            Added /R (relo table) switch
