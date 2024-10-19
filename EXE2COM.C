@@ -70,10 +70,15 @@
 */
 
 #include <ctype.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 256
+#endif
 
 /* Version coding */
 #define MAJVER   1
@@ -118,8 +123,8 @@ struct exe_header {
 FILE *fi,                   /* Input file stream */
      *fo;                   /* Output file stream */
 
-char fin[129],              /* Input file name */
-     fon[129];              /* Output file name */
+char fin[PATH_MAX + 1],              /* Input file name */
+     fon[PATH_MAX + 1];              /* Output file name */
 
 int  info=0;                /* Nonzero if /I found */
 int  relo_map=0;            /* Nonzero if /R found */
